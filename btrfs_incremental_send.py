@@ -6,6 +6,31 @@ from pathlib import Path
 
 SNAPSHOT_DATETIME_FORMAT = '%Y%m%d-%H%M%S%z'
 
+BTRFS_SEND_COMMAND = [
+    'btrfs',
+    'send',
+]
+BTRFS_SEND_PARENT_ADDITION = [
+    '-p',
+    '{parent}',
+]
+BTRFS_RECEIVE_COMMAND = [
+    'btrfs',
+    'receive',
+    '{path}',
+]
+PV_COMMAND = [
+    'pv',
+    '-brt'
+]
+NC6_COMMAND = [
+    'nc6',
+    '-q',
+    '1',
+    '{host}',
+    '{port}',
+]
+
 class Subvolume:
     __slots__ = ['all', 'base', 'extra', 'newest']
 
