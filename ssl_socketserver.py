@@ -6,14 +6,16 @@ class SSL_TCPServer(TCPServer):
             self,
             server_address,
             RequestHandlerClass,
-            certfile,
-            keyfile,
+            cert_file,
+            key_file,
+            ca_cert_file,
             ssl_version=ssl.PROTOCOL_TLSv1_2,
             bind_and_activate=True,
     ):
         super().__init__(server_address, RequestHandlerClass, bind_and_activate)
-        self.certfile = certfile
-        self.keyfile = keyfile
+        self.cert_file = cert_file
+        self.key_file = key_file
+        self.ca_cert_file = ca_cert_file
         self.ssl_version = ssl_version
 
     def get_request(self):
@@ -21,9 +23,11 @@ class SSL_TCPServer(TCPServer):
         connstream = ssl.wrap_socket(
             newsocket,
             server_side=True,
-            certfile=self.certfile,
-            keyfile=self.keyfile,
+            certfile=self.cert_file,
+            keyfile=self.key_file,
+            ca_certs=self.ca_cert_file,
             ssl_version=self.ssl_version,
+            cert_reqs=ssl.CERT_REQUIRED,
         )
         return connstream, fromaddr
 
