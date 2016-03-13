@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-from argparse import ArgumentParser
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -23,8 +21,8 @@ PV_COMMAND = [
     'pv',
     '-brt'
 ]
-NC6_COMMAND = [
-    'nc6',
+NC_COMMAND = [
+    'nc',
     '-q',
     '1',
     '{host}',
@@ -67,7 +65,3 @@ def search_snapshots(path: Path) -> dict:
         subvolume.extra = set(subvolume.all) - {subvolume.newest}
 
     return subvolumes_by_name
-
-if __name__ == '__main__':
-    p = ArgumentParser()
-    args = p.parse_args()
