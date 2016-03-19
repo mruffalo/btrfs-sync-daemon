@@ -17,6 +17,7 @@ class SSL_TCPServer(TCPServer):
         self.key_file = key_file
         self.ca_cert_file = ca_cert_file
         self.ssl_version = ssl_version
+        self.client_cert = None
 
     def get_request(self):
         newsocket, fromaddr = self.socket.accept()
@@ -29,6 +30,7 @@ class SSL_TCPServer(TCPServer):
             ssl_version=self.ssl_version,
             cert_reqs=ssl.CERT_REQUIRED,
         )
+        self.client_cert = connstream.getpeercert()
         return connstream, fromaddr
 
 class SSL_ThreadingTCPServer(ThreadingMixIn, SSL_TCPServer):

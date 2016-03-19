@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+import json
 from pathlib import Path
 
 SNAPSHOT_DATETIME_FORMAT = '%Y%m%d-%H%M%S%z'
@@ -30,6 +31,12 @@ NC_COMMAND = [
 ]
 
 PORT = 35104
+
+def serialize_json(obj) -> bytes:
+    return json.dumps(obj).encode('utf-8') + b'\n'
+
+def deserialize_json(b: bytes):
+    return json.loads(b.decode('utf-8'))
 
 class Subvolume:
     __slots__ = ['all', 'base', 'extra', 'newest']
