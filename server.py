@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
+import io
 from pathlib import Path
 from pprint import pprint
 from socket import socket, AF_INET, SOCK_STREAM
 from socketserver import StreamRequestHandler
 import ssl
-from subprocess import Popen
+from subprocess import PIPE, Popen
 
 from btrfs_incremental_send import PORT, BTRFS_RECEIVE_COMMAND, deserialize_json, serialize_json
 from ssl_socketserver import SSL_ThreadingTCPServer
+
+# 16 MB seems okay
+BUFFER_SIZE = 1 << 24
 
 # TODO read this from config file
 paths = {
@@ -18,6 +22,13 @@ def get_common_name(cert):
     for field in cert['subject']:
         if field[0][0] == 'commonName':
             return field[0][1]
+
+def bulk_copy(read_from: io.RawIOBase, write_to: io.RawIOBase):
+    while True:
+        chunk = read_from.read(BUFFER_SIZE)
+        if not chunk:
+            break
+        write_to.write(chunk)
 
 class BtrfsReceiveHandler(StreamRequestHandler):
     def handle(self):
@@ -61,10 +72,12 @@ class BtrfsReceiveHandler(StreamRequestHandler):
         with open('test', 'wb') as f:
             proc = Popen(
                 ['cat'],
-                stdin=conn,
+                stdin=PIPE,
                 stdout=f,
             )
-        return_code = proc.wait()
+            bulk_copy(conn, proc.stdin)
+            proc.stdin.close()
+            return_code = proc.wait()
         print('command returned {}'.format(return_code))
         conn.close()
 
