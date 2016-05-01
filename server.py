@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
-import io
 from pathlib import Path
-from pprint import pprint
 from socket import socket, AF_INET, SOCK_STREAM
 from socketserver import StreamRequestHandler
 import ssl
 from subprocess import PIPE, Popen
 
-from btrfs_incremental_send import PORT, BTRFS_RECEIVE_COMMAND, deserialize_json, serialize_json
+from btrfs_incremental_send import BTRFS_RECEIVE_COMMAND, CONTROL_PORT, bulk_copy, serialize_json
 from ssl_socketserver import SSL_ThreadingTCPServer
-
-# 16 MB seems okay
-BUFFER_SIZE = 1 << 24
 
 # TODO read this from config file
 paths = {
-    'isomorphic': Path(),
+    'isomorphic': Path('/mnt/btrfs/test/to-receive'),
 }
 
 def get_common_name(cert):
@@ -23,19 +18,8 @@ def get_common_name(cert):
         if field[0][0] == 'commonName':
             return field[0][1]
 
-def bulk_copy(read_from: io.RawIOBase, write_to: io.RawIOBase):
-    while True:
-        chunk = read_from.read(BUFFER_SIZE)
-        if not chunk:
-            break
-        write_to.write(chunk)
-
 class BtrfsReceiveHandler(StreamRequestHandler):
     def handle(self):
-        raw_data = self.rfile.readline()
-        data = deserialize_json(raw_data)
-        pprint(data)
-
         cn = get_common_name(self.server.client_cert)
         if cn not in paths:
             self.wfile.write(serialize_json({'success': False, 'reason': 'bad_hostname'}))
@@ -69,22 +53,28 @@ class BtrfsReceiveHandler(StreamRequestHandler):
             piece.format(path=path)
             for piece in BTRFS_RECEIVE_COMMAND
         ]
-        with open('test', 'wb') as f:
-            proc = Popen(
-                ['cat'],
-                stdin=PIPE,
-                stdout=f,
-            )
-            bulk_copy(conn, proc.stdin)
-            proc.stdin.close()
-            return_code = proc.wait()
+
+        proc = Popen(
+            command,
+            stdin=PIPE,
+            stdout=f,
+            cwd=str(path),
+        )
+        bulk_copy(conn, proc.stdin)
+        proc.stdin.close()
+        return_code = proc.wait()
+
         print('command returned {}'.format(return_code))
         conn.close()
 
-        self.wfile.write(serialize_json({'result': return_code}))
+        data = {
+            'return_code': return_code,
+            'success': not return_code,
+        }
+        self.wfile.write(serialize_json(data))
 
 SSL_ThreadingTCPServer(
-    ('localhost', PORT),
+    ('localhost', CONTROL_PORT),
     BtrfsReceiveHandler,
     'server.crt.pem',
     'server.key.pem',

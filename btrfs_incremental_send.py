@@ -1,7 +1,11 @@
 from collections import defaultdict
 from datetime import datetime
+import io
 import json
 from pathlib import Path
+from subprocess import PIPE, Popen, check_call
+
+KEEP_FILE_EXTENSION = '.keep'
 
 SNAPSHOT_DATETIME_FORMAT = '%Y%m%d-%H%M%S%z'
 
@@ -13,6 +17,11 @@ BTRFS_SEND_PARENT_ADDITION = [
     '-p',
     '{parent}',
 ]
+BTRFS_DELETE_COMMAND = [
+    'btrfs',
+    'subvolume',
+    'delete',
+]
 BTRFS_RECEIVE_COMMAND = [
     'btrfs',
     'receive',
@@ -23,7 +32,17 @@ PV_COMMAND = [
     '-brt'
 ]
 
-PORT = 35104
+CONTROL_PORT = 35104
+
+# 16 MB seems okay
+BUFFER_SIZE = 1 << 24
+
+def bulk_copy(read_from: io.RawIOBase, write_to: io.RawIOBase):
+    while True:
+        chunk = read_from.read(BUFFER_SIZE)
+        if not chunk:
+            break
+        write_to.write(chunk)
 
 def serialize_json(obj) -> bytes:
     return json.dumps(obj).encode('utf-8') + b'\n'
@@ -32,7 +51,7 @@ def deserialize_json(b: bytes):
     return json.loads(b.decode('utf-8'))
 
 class Subvolume:
-    __slots__ = ['all', 'base', 'extra', 'newest']
+    __slots__ = ['all', 'base', 'extra', 'newest', 'cwd']
 
     def __init__(self):
         # All snapshots of this subvolume
@@ -58,12 +77,47 @@ def search_snapshots(path: Path) -> dict:
         subvolume = subvolumes_by_name[name]
         if entry.is_file():
             if entry.name.endswith('.keep'):
+                # TODO figure out how important this is
+                if subvolume.base is not None:
+                    raise ValueError('Multiple base snapshots')
                 subvolume.base = entry.stem
         else:
             subvolume.all.append(entry.name)
 
+    # Found all snapshots; assign some bookkeeping data to each
     for subvolume in subvolumes_by_name.values():
+        subvolume.cwd = path
         subvolume.newest = max(subvolume.all, key=parse_datetime)
         subvolume.extra = set(subvolume.all) - {subvolume.newest}
 
     return subvolumes_by_name
+
+def send_snapshot(socket: io.RawIOBase, snapshot: Subvolume):
+    command = BTRFS_SEND_COMMAND[:]
+    if snapshot.base is not None:
+        command.extend(
+            [
+                piece.format(parent=snapshot.base)
+                for piece in BTRFS_SEND_PARENT_ADDITION
+            ]
+        )
+    command.append(snapshot.newest)
+    print('Running', ' '.join(command))
+    p = Popen(command, stdout=PIPE, cwd=str(snapshot.cwd))
+    bulk_copy(p.stdout, socket)
+    # TODO see if this is necessary
+    p.stdout.close()
+    return_code = p.wait()
+    print('Command returned {}'.format(return_code))
+
+def prune_old_snapshots(snapshot: Subvolume):
+    command = BTRFS_DELETE_COMMAND[:]
+    command.extend(snapshot.extra)
+    print('Running', ' '.join(command))
+    check_call(command, cwd=str(snapshot.cwd))
+    if snapshot.base is not None:
+        old_keep_file = snapshot.cwd / (snapshot.base + KEEP_FILE_EXTENSION)
+        old_keep_file.unlink()
+    new_keep_file = snapshot.cwd / (snapshot.newest + KEEP_FILE_EXTENSION)
+    with new_keep_file.open('w'):
+        pass
