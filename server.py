@@ -57,7 +57,6 @@ class BtrfsReceiveHandler(StreamRequestHandler):
         proc = Popen(
             command,
             stdin=PIPE,
-            stdout=f,
             cwd=str(path),
         )
         bulk_copy(conn, proc.stdin)
