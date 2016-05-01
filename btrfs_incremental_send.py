@@ -22,13 +22,6 @@ PV_COMMAND = [
     'pv',
     '-brt'
 ]
-NC_COMMAND = [
-    'nc',
-    '-q',
-    '1',
-    '{host}',
-    '{port}',
-]
 
 PORT = 35104
 
