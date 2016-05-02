@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from configparser import ConfigParser
 from pathlib import Path
+import re
 from socket import socket, AF_INET, SOCK_STREAM
 from socketserver import StreamRequestHandler
 import ssl
@@ -9,24 +10,34 @@ from subprocess import PIPE, Popen
 from btrfs_incremental_send import BTRFS_RECEIVE_COMMAND, CONTROL_PORT, bulk_copy, serialize_json
 from ssl_socketserver import SSL_ThreadingTCPServer
 
+PATH_PATTERN = re.compile(r'path/(.+)')
+
 def get_common_name(cert):
     for field in cert['subject']:
         if field[0][0] == 'commonName':
             return field[0][1]
 
-CONFIG_FILE_PATHS = [
-    Path('/etc/btrfs-syncd/server.conf'),
-]
-def read_config():
-    for path in CONFIG_FILE_PATHS:
-        try:
-            config = ConfigParser()
-            config.read(str(path))
-            return config
-        except FileNotFoundError:
-            pass
-    message = 'No config files found, tried:{}'.format('\n'.join(CONFIG_FILE_PATHS))
-    raise FileNotFoundError(message)
+CONFIG_FILE_PATH = Path('/etc/btrfs-syncd/server.conf')
+def parse_config():
+    config = ConfigParser()
+    config.read(str(CONFIG_FILE_PATH))
+
+    paths = {}
+    for key in config:
+        m = PATH_PATTERN.match(key)
+        if m:
+            name = m.group(1)
+            paths[name] = Path(config[key]['path'])
+
+    if 'key_dir' in config['keys']:
+        key_dir = CONFIG_FILE_PATH.parent / config['keys']['key_dir']
+    else:
+        key_dir = CONFIG_FILE_PATH.parent
+    key_paths = {}
+    for k in ['ca_cert', 'server_cert', 'server_key']:
+        key_paths[k] = key_dir / config['keys'][k]
+
+    return config, paths, key_paths
 
 def get_handler_class(paths):
     class BtrfsReceiveHandler(StreamRequestHandler):
@@ -86,16 +97,12 @@ def get_handler_class(paths):
     return BtrfsReceiveHandler
 
 if __name__ == '__main__':
-    # TODO move all of this
-    paths = {}
-    config = read_config()
-    for key in config:
-        if key.startswith('path/'):
+    config, paths, key_paths = parse_config()
 
     SSL_ThreadingTCPServer(
-        ('localhost', CONTROL_PORT),
-        BtrfsReceiveHandler,
-        'server.crt.pem',
-        'server.key.pem',
-        'ca.crt.pem'
+        ('0.0.0.0', CONTROL_PORT),
+        get_handler_class(paths),
+        str(key_paths['server_cert']),
+        str(key_paths['server_key']),
+        str(key_paths['ca_cert']),
     ).serve_forever()
