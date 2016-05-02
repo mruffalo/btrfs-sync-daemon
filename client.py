@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+from configparser import ConfigParser
 from pathlib import Path
 from pprint import pprint
 import socket
 import ssl
+from typing import Mapping
 
 from btrfs_incremental_send import (
     CONTROL_PORT,
+    PATH_CONFIG_KEY_PATTERN,
     Subvolume,
     deserialize_json,
     prune_old_snapshots,
@@ -13,7 +16,47 @@ from btrfs_incremental_send import (
     send_snapshot,
 )
 
-def backup_snapshot(snapshot: Subvolume, host: str):
+class BackupPath:
+    __slots__ = ['name', 'path', 'automount', 'mount_path']
+
+    def __init__(self, name, path, automount, mount_path):
+        self.name = name
+        self.path = path
+        self.automount = automount
+        self.mount_path = mount_path
+
+CONFIG_FILE_PATH = Path('/etc/btrfs-syncd/client.conf')
+def parse_config():
+    # TODO unify this with server.parse_config, or at least don't duplicate everything
+    config = ConfigParser()
+    config.read(str(CONFIG_FILE_PATH))
+
+    paths = {}
+    for key in config:
+        m = PATH_CONFIG_KEY_PATTERN.match(key)
+        if m:
+            name = m.group(1)
+            path = Path(config[key]['path'])
+            automount = False
+            mount_path = None
+            if 'automount' in config[key]:
+                automount = config[key].getboolean('automount')
+                mount_path = config[key]['mount path']
+
+            bp = BackupPath(name, path, automount, mount_path)
+            paths[name] = bp
+
+    if 'key_dir' in config['keys']:
+        key_dir = CONFIG_FILE_PATH.parent / config['keys']['key_dir']
+    else:
+        key_dir = CONFIG_FILE_PATH.parent
+    key_paths = {}
+    for k in ['ca_cert', 'client_cert', 'client_key']:
+        key_paths[k] = key_dir / config['keys'][k]
+
+    return config, paths, key_paths
+
+def backup_snapshot(snapshot: Subvolume, host: str, key_paths: Mapping[str, Path]):
     """
     Connect to the sync daemon on the remote server, and then call the
     btrfs-specific functionality in this code to:
@@ -30,8 +73,11 @@ def backup_snapshot(snapshot: Subvolume, host: str):
     context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
     context.verify_mode = ssl.CERT_REQUIRED
     context.check_hostname = False
-    context.load_verify_locations('ca.crt.pem')
-    context.load_cert_chain('client.crt.pem', keyfile='client.key.pem')
+    context.load_verify_locations(str(key_paths['ca_cert']))
+    context.load_cert_chain(
+        str(key_paths['client_cert']),
+        keyfile=str(key_paths['client_key']),
+    )
 
     conn_control = context.wrap_socket(sock_control)
 
@@ -70,5 +116,21 @@ def backup_snapshot(snapshot: Subvolume, host: str):
         conn_control.close()
 
 if __name__ == '__main__':
-    for snapshot in search_snapshots(Path('/mnt/btrfs/test/snapshots')).values():
-        backup_snapshot(snapshot, 'localhost')
+    config, paths, key_paths = parse_config()
+
+    for path in paths.values():
+        for name, snapshot in search_snapshots(path).items():
+            if snapshot.newest == snapshot.base:
+                message = "Most recent snapshot for '{}' ({}) already on remote system".format(
+                    name,
+                    snapshot.newest,
+                )
+                print(message)
+            else:
+                message = "Need to backup subvolume {} (base snapshot: {}, most recent: {})".format(
+                    name,
+                    snapshot.base,
+                    snapshot.newest,
+                )
+                print(message)
+                backup_snapshot(snapshot, config['server']['host'], key_paths)

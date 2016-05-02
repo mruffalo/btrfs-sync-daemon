@@ -7,10 +7,15 @@ from socketserver import StreamRequestHandler
 import ssl
 from subprocess import PIPE, Popen
 
-from btrfs_incremental_send import BTRFS_RECEIVE_COMMAND, CONTROL_PORT, bulk_copy, serialize_json
+from btrfs_incremental_send import (
+    BTRFS_RECEIVE_COMMAND,
+    CONTROL_PORT,
+    PATH_CONFIG_KEY_PATTERN,
+    bulk_copy,
+    serialize_json,
+)
 from ssl_socketserver import SSL_ThreadingTCPServer
 
-PATH_PATTERN = re.compile(r'path/(.+)')
 
 def get_common_name(cert):
     for field in cert['subject']:
@@ -24,7 +29,7 @@ def parse_config():
 
     paths = {}
     for key in config:
-        m = PATH_PATTERN.match(key)
+        m = PATH_CONFIG_KEY_PATTERN.match(key)
         if m:
             name = m.group(1)
             paths[name] = Path(config[key]['path'])

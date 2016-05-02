@@ -3,7 +3,9 @@ from datetime import datetime
 import io
 import json
 from pathlib import Path
+import re
 from subprocess import PIPE, Popen, check_call
+from typing import Mapping
 
 KEEP_FILE_EXTENSION = '.keep'
 
@@ -37,6 +39,8 @@ CONTROL_PORT = 35104
 # 16 MB seems okay
 BUFFER_SIZE = 1 << 24
 
+PATH_CONFIG_KEY_PATTERN = re.compile(r'path/(.+)')
+
 def bulk_copy(read_from: io.RawIOBase, write_to: io.RawIOBase):
     while True:
         chunk = read_from.read(BUFFER_SIZE)
@@ -69,7 +73,7 @@ def parse_datetime(snapshot_name: str) -> datetime:
     name, timestamp = snapshot_name.split('@')
     return datetime.strptime(timestamp, SNAPSHOT_DATETIME_FORMAT)
 
-def search_snapshots(path: Path) -> dict:
+def search_snapshots(path: Path) -> Mapping[str, Subvolume]:
     subvolumes_by_name = defaultdict(Subvolume)
 
     for entry in path.iterdir():
