@@ -107,12 +107,14 @@ def send_snapshot(socket: io.RawIOBase, snapshot: Subvolume):
         )
     command.append(snapshot.newest)
     print('Running', ' '.join(command))
-    p = Popen(command, stdout=PIPE, cwd=str(snapshot.cwd))
-    bulk_copy(p.stdout, socket)
+    btrfs_proc = Popen(command, stdout=PIPE, cwd=str(snapshot.cwd))
+    pv_proc = Popen(PV_COMMAND, stdin=btrfs_proc.stdout, stdout=PIPE)
+    bulk_copy(pv_proc.stdout, socket)
     # TODO see if this is necessary
-    p.stdout.close()
-    return_code = p.wait()
+    btrfs_proc.stdout.close()
+    return_code = btrfs_proc.wait()
     print('Command returned {}'.format(return_code))
+    pv_proc.wait()
 
 def prune_old_snapshots(snapshot: Subvolume):
     command = BTRFS_DELETE_COMMAND[:]
