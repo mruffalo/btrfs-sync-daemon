@@ -119,7 +119,7 @@ if __name__ == '__main__':
     config, paths, key_paths = parse_config()
 
     for path in paths.values():
-        for name, snapshot in search_snapshots(path).items():
+        for name, snapshot in search_snapshots(path.path).items():
             if snapshot.newest == snapshot.base:
                 message = "Most recent snapshot for '{}' ({}) already on remote system".format(
                     name,
