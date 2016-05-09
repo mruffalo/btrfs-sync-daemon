@@ -83,7 +83,7 @@ def backup_snapshot(snapshot: Subvolume, host: str, key_paths: Mapping[str, Path
 
     try:
         # Connect to server and send data
-        print('Connecting to server')
+        print('Connecting to server', host, 'port', CONTROL_PORT)
         conn_control.connect((host, CONTROL_PORT))
 
         # Receive data from the server and shut down
@@ -101,12 +101,13 @@ def backup_snapshot(snapshot: Subvolume, host: str, key_paths: Mapping[str, Path
                 print('Sending data')
                 send_snapshot(conn_data, snapshot)
 
-                send_result = deserialize_json(conn_control.recv(1024))
-                if send_result['success']:
-                    print('Snapshot sent successfully; cleaning up old ones')
-                    prune_old_snapshots(snapshot)
             finally:
                 conn_data.close()
+
+            send_result = deserialize_json(conn_control.recv(1024))
+            if send_result['success']:
+                print('Snapshot sent successfully; cleaning up old ones')
+                prune_old_snapshots(snapshot)
 
         else:
             print('Server returned failure')
