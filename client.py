@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from configparser import ConfigParser
+from fnmatch import fnmatch
 from os.path import ismount
 from pathlib import Path
 from pprint import pprint
@@ -17,6 +18,13 @@ from btrfs_incremental_send import (
     search_snapshots,
     send_snapshot,
 )
+
+netifaces_available = False
+try:
+    import netifaces
+    netifaces_available = True
+except ImportError:
+    pass
 
 MOUNT_COMMAND = [
     'mount',
@@ -138,8 +146,48 @@ def umount_path(path: Path):
     command = [piece.format(path=path) for piece in UMOUNT_COMMAND]
     Popen(command).wait()
 
+class BackupPrerequisiteFailed(Exception):
+    pass
+
+def check_should_backup_network(config):
+    if 'network' not in config:
+        # No network configuration. Allow backups.
+        return
+    if not netifaces_available:
+        print("Can't query network status; `netifaces` package not available")
+        return
+
+    if 'required interface' in config['network']:
+        # This config key can be a fnmatch pattern, so check all interfaces
+        # matched by the required interface name. Allow backups if any of them
+        # have an IP address.
+        pass
+
+def check_should_backup_power(config):
+    if 'power' not in config:
+        # No power config. Allow backups.
+        return
+    if not config['power'].getboolean('require ac power'):
+        # AC power not required. Allow backups.
+        return
+    ac_online_path = '/sys/class/power_supply/AC/online'
+    with open(ac_online_path) as f:
+        ac_online = int(f.read().strip())
+        if not ac_online:
+            raise BackupPrerequisiteFailed('On battery power')
+
+def check_should_backup(config):
+    check_should_backup_network(config)
+    check_should_backup_power(config)
+
 if __name__ == '__main__':
     config, backup_paths, key_paths = parse_config()
+
+    try:
+        check_should_backup(config)
+    except BackupPrerequisiteFailed as e:
+        print('Not backing up, for reason:')
+        print(e.args[0])
 
     for bp in backup_paths.values():
         if bp.automount:
