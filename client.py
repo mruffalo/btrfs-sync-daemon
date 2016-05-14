@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from configparser import ConfigParser
+from os.path import ismount
 from pathlib import Path
 from pprint import pprint
 import socket
+from subprocess import Popen, check_call
 import ssl
 from typing import Mapping
 
@@ -15,6 +17,15 @@ from btrfs_incremental_send import (
     search_snapshots,
     send_snapshot,
 )
+
+MOUNT_COMMAND = [
+    'mount',
+    '{path}',
+]
+UMOUNT_COMMAND = [
+    'umount',
+    '{path}'
+]
 
 class BackupPath:
     __slots__ = ['name', 'path', 'automount', 'mount_path']
@@ -116,22 +127,43 @@ def backup_snapshot(snapshot: Subvolume, host: str, key_paths: Mapping[str, Path
     finally:
         conn_control.close()
 
-if __name__ == '__main__':
-    config, paths, key_paths = parse_config()
+def mount_path_if_necessary(path: Path):
+    if not ismount(str(path)):
+        print('Mounting', path)
+        mount_command = [piece.format(path=path) for piece in MOUNT_COMMAND]
+        check_call(mount_command)
 
-    for path in paths.values():
-        for name, snapshot in search_snapshots(path.path).items():
-            if snapshot.newest == snapshot.base:
-                message = "Most recent snapshot for '{}' ({}) already on remote system".format(
-                    name,
-                    snapshot.newest,
-                )
-                print(message)
-            else:
-                message = "Need to backup subvolume {} (base snapshot: {}, most recent: {})".format(
-                    name,
-                    snapshot.base,
-                    snapshot.newest,
-                )
-                print(message)
-                backup_snapshot(snapshot, config['server']['host'], key_paths)
+def umount_path(path: Path):
+    print('Unmounting', path)
+    command = [piece.format(path=path) for piece in UMOUNT_COMMAND]
+    Popen(command).wait()
+
+if __name__ == '__main__':
+    config, backup_paths, key_paths = parse_config()
+
+    for bp in backup_paths.values():
+        if bp.automount:
+            mount_path_if_necessary(bp.mount_path)
+
+        try:
+            for name, snapshot in search_snapshots(bp.path).items():
+                if snapshot.newest == snapshot.base:
+                    message = "Most recent snapshot for '{}' ({}) already on remote system".format(
+                        name,
+                        snapshot.newest,
+                    )
+                    print(message)
+                else:
+                    message = (
+                        "Need to backup subvolume {} (base snapshot: {}, most recent: {})"
+                    ).format(
+                        name,
+                        snapshot.base,
+                        snapshot.newest,
+                    )
+                    print(message)
+                    backup_snapshot(snapshot, config['server']['host'], key_paths)
+
+        finally:
+            if bp.automount:
+                umount_path(bp.mount_path)
