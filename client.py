@@ -177,13 +177,13 @@ def check_should_backup_network(config):
             interface_address_families = set(interface_addresses) & IP_ADDRESS_FAMILIES
             for address_family in interface_address_families:
                 any_matching_interface_has_ip = True
-                address_data = interface_addresses[address_family]
-                # netifaces returns link-local IPv6 addresses of the form
-                #   address%interface_name
-                addr = address_data['addr'].split('%')[0]
-                netmask = fix_long_ipv6_netmask(address_data['netmask'])
-                interface_str = '{}/{}'.format(addr, netmask)
-                interface_ip_addresses.append(ipaddress.ip_interface(interface_str))
+                for address_data in interface_addresses[address_family]:
+                    # netifaces returns link-local IPv6 addresses of the form
+                    #   address%interface_name
+                    addr = address_data['addr'].split('%')[0]
+                    netmask = fix_long_ipv6_netmask(address_data['netmask'])
+                    interface_str = '{}/{}'.format(addr, netmask)
+                    interface_ip_addresses.append(ipaddress.ip_interface(interface_str))
 
         if 'require same subnet' in config['network']:
             backup_dest_ip = ipaddress.ip_address(socket.gethostbyname(config['server']['host']))
