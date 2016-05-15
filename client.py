@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from configparser import ConfigParser
 from fnmatch import fnmatch
+from functools import partial
+import ipaddress
 from os.path import ismount
 from pathlib import Path
 from pprint import pprint
@@ -18,6 +20,7 @@ from btrfs_incremental_send import (
     search_snapshots,
     send_snapshot,
 )
+from network_utils import fix_long_ipv6_netmask
 
 netifaces_available = False
 try:
@@ -164,13 +167,30 @@ def check_should_backup_network(config):
         # matched by the required interface name. Allow backups if any of them
         # have an IP address.
         any_matching_interface_has_ip = False
-        ip_addresses = []
-        for interface in netifaces.interfaces():
+        interface_ip_addresses = []
+        matching_interfaces = filter(
+            partial(fnmatch, pat=config['network']['required interface']),
+            netifaces.interfaces(),
+        )
+        for interface in matching_interfaces:
             interface_addresses = netifaces.ifaddresses(interface)
             interface_address_families = set(interface_addresses) & IP_ADDRESS_FAMILIES
             for address_family in interface_address_families:
                 any_matching_interface_has_ip = True
                 address_data = interface_addresses[address_family]
+                # netifaces returns link-local IPv6 addresses of the form
+                #   address%interface_name
+                addr = address_data['addr'].split('%')[0]
+                netmask = fix_long_ipv6_netmask(address_data['netmask'])
+                interface_str = '{}/{}'.format(addr, netmask)
+                interface_ip_addresses.append(ipaddress.ip_interface(interface_str))
+
+        if 'require same subnet' in config['network']:
+            backup_dest_ip = ipaddress.ip_address(socket.gethostbyname(config['server']['host']))
+            if not any(backup_dest_ip in ip.network for ip in interface_ip_addresses):
+                raise BackupPrerequisiteFailed(
+                    'No matching interface has IP in same network as backup destination'
+                )
 
         if not any_matching_interface_has_ip:
             raise BackupPrerequisiteFailed('No matching network interface is active')
