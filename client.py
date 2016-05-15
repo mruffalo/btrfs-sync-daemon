@@ -149,6 +149,8 @@ def umount_path(path: Path):
 class BackupPrerequisiteFailed(Exception):
     pass
 
+IP_ADDRESS_FAMILIES = frozenset({netifaces.AF_INET, netifaces.AF_INET6})
+
 def check_should_backup_network(config):
     if 'network' not in config:
         # No network configuration. Allow backups.
@@ -161,7 +163,17 @@ def check_should_backup_network(config):
         # This config key can be a fnmatch pattern, so check all interfaces
         # matched by the required interface name. Allow backups if any of them
         # have an IP address.
-        pass
+        any_matching_interface_has_ip = False
+        ip_addresses = []
+        for interface in netifaces.interfaces():
+            interface_addresses = netifaces.ifaddresses(interface)
+            interface_address_families = set(interface_addresses) & IP_ADDRESS_FAMILIES
+            for address_family in interface_address_families:
+                any_matching_interface_has_ip = True
+                address_data = interface_addresses[address_family]
+
+        if not any_matching_interface_has_ip:
+            raise BackupPrerequisiteFailed('No matching network interface is active')
 
 def check_should_backup_power(config):
     if 'power' not in config:
