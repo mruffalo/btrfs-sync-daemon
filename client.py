@@ -9,6 +9,7 @@ from pprint import pprint
 import socket
 from subprocess import Popen, check_call
 import ssl
+import sys
 from typing import Mapping
 
 from btrfs_incremental_send import (
@@ -220,6 +221,7 @@ if __name__ == '__main__':
     except BackupPrerequisiteFailed as e:
         print('Not backing up, for reason:')
         print(e.args[0])
+        sys.exit(1)
 
     for bp in backup_paths.values():
         if bp.automount:
