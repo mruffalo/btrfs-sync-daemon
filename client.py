@@ -24,8 +24,11 @@ from btrfs_incremental_send import (
 from network_utils import fix_long_ipv6_netmask
 
 netifaces_available = False
+IP_ADDRESS_FAMILIES = frozenset()
+
 try:
     import netifaces
+    IP_ADDRESS_FAMILIES = frozenset({netifaces.AF_INET, netifaces.AF_INET6})
     netifaces_available = True
 except ImportError:
     pass
@@ -152,8 +155,6 @@ def umount_path(path: Path):
 
 class BackupPrerequisiteFailed(Exception):
     pass
-
-IP_ADDRESS_FAMILIES = frozenset({netifaces.AF_INET, netifaces.AF_INET6})
 
 def check_should_backup_network(config):
     if 'network' not in config:
