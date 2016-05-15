@@ -164,36 +164,42 @@ def check_should_backup_network(config):
         print("Can't query network status; `netifaces` package not available")
         return
 
+    # This config key can be a fnmatch pattern, so check all interfaces
+    # matched by the required interface name. Allow backups if any of them
+    # have an IP address.
+    any_matching_interface_has_ip = False
+    interface_ip_addresses = []
+
+    # TODO clean up this logic a little bit
     if 'required interface' in config['network']:
-        # This config key can be a fnmatch pattern, so check all interfaces
-        # matched by the required interface name. Allow backups if any of them
-        # have an IP address.
-        any_matching_interface_has_ip = False
-        interface_ip_addresses = []
         matching_interfaces = filter(
             partial(fnmatch, pat=config['network']['required interface']),
             netifaces.interfaces(),
         )
-        for interface in matching_interfaces:
-            interface_addresses = netifaces.ifaddresses(interface)
-            interface_address_families = set(interface_addresses) & IP_ADDRESS_FAMILIES
-            for address_family in interface_address_families:
-                any_matching_interface_has_ip = True
-                for address_data in interface_addresses[address_family]:
-                    # netifaces returns link-local IPv6 addresses of the form
-                    #   address%interface_name
-                    addr = address_data['addr'].split('%')[0]
-                    netmask = fix_long_ipv6_netmask(address_data['netmask'])
-                    interface_str = '{}/{}'.format(addr, netmask)
-                    interface_ip_addresses.append(ipaddress.ip_interface(interface_str))
+    else:
+        matching_interfaces = netifaces.interfaces()
 
-        if 'require same subnet' in config['network']:
-            backup_dest_ip = ipaddress.ip_address(socket.gethostbyname(config['server']['host']))
-            if not any(backup_dest_ip in ip.network for ip in interface_ip_addresses):
-                raise BackupPrerequisiteFailed(
-                    'No matching interface has IP in same network as backup destination'
-                )
+    for interface in matching_interfaces:
+        interface_addresses = netifaces.ifaddresses(interface)
+        interface_address_families = set(interface_addresses) & IP_ADDRESS_FAMILIES
+        for address_family in interface_address_families:
+            any_matching_interface_has_ip = True
+            for address_data in interface_addresses[address_family]:
+                # netifaces returns link-local IPv6 addresses of the form
+                #   address%interface_name
+                addr = address_data['addr'].split('%')[0]
+                netmask = fix_long_ipv6_netmask(address_data['netmask'])
+                interface_str = '{}/{}'.format(addr, netmask)
+                interface_ip_addresses.append(ipaddress.ip_interface(interface_str))
 
+    if 'require same subnet' in config['network']:
+        backup_dest_ip = ipaddress.ip_address(socket.gethostbyname(config['server']['host']))
+        if not any(backup_dest_ip in ip.network for ip in interface_ip_addresses):
+            raise BackupPrerequisiteFailed(
+                'No matching interface has IP in same network as backup destination'
+            )
+
+    if 'required interface' in config['network']:
         if not any_matching_interface_has_ip:
             raise BackupPrerequisiteFailed('No matching network interface is active')
 
