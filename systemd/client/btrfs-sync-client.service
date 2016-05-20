@@ -1,0 +1,5 @@
+[Unit]
+Description=btrfs sync client
+
+[Service]
+ExecStart=/opt/btrfs-sync-daemon/client.py

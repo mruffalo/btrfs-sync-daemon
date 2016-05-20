@@ -1,0 +1,8 @@
+[Unit]
+Description=btrfs sync daemon
+
+[Service]
+ExecStart=/opt/btrfs-sync-daemon/server.py
+
+[Install]
+WantedBy=multi-user.target

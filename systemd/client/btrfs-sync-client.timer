@@ -1,0 +1,8 @@
+[Unit]
+Description=Run btrfs sync client at 02:00 nightly
+
+[Timer]
+OnCalendar=02:00:00
+
+[Install]
+WantedBy=timers.target
