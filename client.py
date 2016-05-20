@@ -170,14 +170,12 @@ def check_should_backup_network(config):
     any_matching_interface_has_ip = False
     interface_ip_addresses = []
 
-    # TODO clean up this logic a little bit
+    matching_interfaces = netifaces.interfaces()
     if 'required interface' in config['network']:
         matching_interfaces = filter(
             partial(fnmatch, pat=config['network']['required interface']),
-            netifaces.interfaces(),
+            matching_interfaces,
         )
-    else:
-        matching_interfaces = netifaces.interfaces()
 
     for interface in matching_interfaces:
         interface_addresses = netifaces.ifaddresses(interface)
