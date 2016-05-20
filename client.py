@@ -208,11 +208,15 @@ def check_should_backup_power(config):
     if not config['power'].getboolean('require ac power'):
         # AC power not required. Allow backups.
         return
-    ac_online_path = '/sys/class/power_supply/AC/online'
-    with open(ac_online_path) as f:
-        ac_online = int(f.read().strip())
-        if not ac_online:
-            raise BackupPrerequisiteFailed('On battery power')
+    ac_online_path = Path('/sys/class/power_supply/AC/online')
+    try:
+        with ac_online_path.open() as f:
+            ac_online = int(f.read().strip())
+            if not ac_online:
+                raise BackupPrerequisiteFailed('On battery power')
+    except FileNotFoundError:
+        # No power information. Probably a desktop system. Allow backups.
+        return
 
 def check_should_backup(config):
     check_should_backup_network(config)
