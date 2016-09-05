@@ -117,13 +117,16 @@ def send_snapshot(socket: io.RawIOBase, snapshot: Subvolume):
     pv_proc.wait()
 
 def prune_old_snapshots(snapshot: Subvolume):
-    command = BTRFS_DELETE_COMMAND[:]
-    command.extend(snapshot.extra)
-    print('Running', ' '.join(command))
-    check_call(command, cwd=str(snapshot.cwd))
-    if snapshot.base is not None:
-        old_keep_file = snapshot.cwd / (snapshot.base + KEEP_FILE_EXTENSION)
-        old_keep_file.unlink()
-    new_keep_file = snapshot.cwd / (snapshot.newest + KEEP_FILE_EXTENSION)
-    with new_keep_file.open('w'):
-        pass
+    if snapshot.extra:
+        command = BTRFS_DELETE_COMMAND[:]
+        command.extend(snapshot.extra)
+        print('Running', ' '.join(command))
+        check_call(command, cwd=str(snapshot.cwd))
+        if snapshot.base is not None:
+            old_keep_file = snapshot.cwd / (snapshot.base + KEEP_FILE_EXTENSION)
+            old_keep_file.unlink()
+        new_keep_file = snapshot.cwd / (snapshot.newest + KEEP_FILE_EXTENSION)
+        with new_keep_file.open('w'):
+            pass
+    else:
+        print('Nothing to delete for subvolume', snapshot.base)
