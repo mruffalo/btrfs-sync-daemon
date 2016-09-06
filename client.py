@@ -194,7 +194,7 @@ def check_should_backup_network(config):
         if not any_matching_interface_has_ip:
             raise BackupPrerequisiteFailed('No matching network interface is active')
 
-    if 'require same subnet' in config['network']:
+    if config['network'].getboolean('require same subnet'):
         backup_dest_ip = ipaddress.ip_address(socket.gethostbyname(config['server']['host']))
         if not any(backup_dest_ip in ip.network for ip in interface_ip_addresses):
             raise BackupPrerequisiteFailed(
