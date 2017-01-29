@@ -103,6 +103,9 @@ def get_handler_class(paths):
 
 if __name__ == '__main__':
     config, paths, key_paths = parse_config()
+    print('Initializing btrfs sync server. Hostname -> path mapping:')
+    for hostname in sorted(paths):
+        print('{} -> {}'.format(hostname, paths[hostname]))
 
     SSL_ThreadingTCPServer(
         ('0.0.0.0', CONTROL_PORT),
