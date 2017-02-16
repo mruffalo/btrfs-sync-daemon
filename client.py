@@ -222,7 +222,7 @@ def check_should_backup(config):
     check_should_backup_network(config)
     check_should_backup_power(config)
 
-if __name__ == '__main__':
+def main():
     config, backup_paths, key_paths = parse_config()
 
     try:
@@ -258,3 +258,6 @@ if __name__ == '__main__':
         finally:
             if bp.automount:
                 umount_path(bp.mount_path)
+
+if __name__ == '__main__':
+    main()
