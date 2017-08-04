@@ -131,6 +131,8 @@ def backup_snapshot(snapshot: Subvolume, host: str, key_paths: Mapping[str, Path
                 conn_data.close()
 
             send_result = deserialize_json(conn_control.recv(1024))
+            print('Response from server:')
+            print(send_result)
             if send_result['success']:
                 print('Snapshot sent successfully; cleaning up old ones')
                 prune_old_snapshots(snapshot)

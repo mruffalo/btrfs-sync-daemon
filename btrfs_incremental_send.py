@@ -113,7 +113,7 @@ def send_snapshot(socket: io.RawIOBase, snapshot: Subvolume):
     # TODO see if this is necessary
     btrfs_proc.stdout.close()
     return_code = btrfs_proc.wait()
-    print('Command returned {}'.format(return_code))
+    print('`btrfs send` command returned {}'.format(return_code))
     pv_proc.wait()
 
 def prune_old_snapshots(snapshot: Subvolume):
