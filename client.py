@@ -22,6 +22,7 @@ from btrfs_incremental_send import (
     send_snapshot,
 )
 from network_utils import fix_long_ipv6_netmask
+from notify import Notifier
 
 netifaces_available = False
 IP_ADDRESS_FAMILIES = frozenset()
@@ -234,6 +235,9 @@ def main():
         print(e.args[0])
         sys.exit(1)
 
+    notifier = Notifier()
+    notifier.notify('Starting backup')
+
     for bp in backup_paths.values():
         if bp.automount:
             mount_path_if_necessary(bp.mount_path)
@@ -260,6 +264,8 @@ def main():
         finally:
             if bp.automount:
                 umount_path(bp.mount_path)
+
+    notifier.notify('Backup complete')
 
 if __name__ == '__main__':
     main()
